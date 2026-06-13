@@ -53,19 +53,20 @@ def handle_image_generation(message):
     except Exception as e:
         bot.edit_message_text("Не удалось сгенерировать изображение.", message.chat.id, status_msg.message_id)
 
-# 2. Текстовый чат (DeepSeek)
+# 2. ТЕКСТОВЫЙ ЧАТ (DeepSeek)
 @bot.message_handler(func=lambda message: True)
 def handle_text_chat(message):
     try:
-        # Используем официальную универсальную модель deepseek-chat
+        # Используем новейшую модель DeepSeek V4-Flash
         completion = ai_client.chat.completions.create(
-            model="deepseek-chat",
+            model="deepseek-v4-flash",
             messages=[{"role": "user", "content": message.text}]
         )
         bot.reply_to(message, completion.choices.message.content)
     except Exception as e:
         bot.reply_to(message, f"Ошибка ИИ при генерации ответа. Подробности: {e}")
         print(f"Ошибка Текста: {e}")
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
