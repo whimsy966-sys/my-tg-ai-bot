@@ -2,10 +2,11 @@ import os
 import telebot
 import requests
 import io
+import json
 from openai import OpenAI
 from flask import Flask, request
 
-# Секреты
+# Секреты из переменных окружения
 TG_TOKEN = os.environ.get("TG_TOKEN")
 TEXT_AI_API_KEY = os.environ.get("TEXT_AI_API_KEY")
 HF_TOKEN = os.environ.get("HF_TOKEN")
@@ -13,11 +14,14 @@ HF_TOKEN = os.environ.get("HF_TOKEN")
 bot = telebot.TeleBot(TG_TOKEN, threaded=False)
 app = Flask(__name__)
 
-# Groq (быстрый и бесплатный)
+# Правильный Groq клиент
 ai_client = OpenAI(
     base_url="https://api.groq.com/openai/v1",
     api_key=TEXT_AI_API_KEY
 )
+
+# URL модели Flux (можно заменить на FLUX.1-schnell или другую)
+FLUX_API_URL = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-dev"
 
 @app.route(f'/{TG_TOKEN}', methods=['POST'])
 def receive_update():
@@ -28,87 +32,56 @@ def receive_update():
 
 @app.route('/')
 def homepage():
-    return "Бот активен на Render! 🚀", 200
+    return "Бот активен!", 200
 
-# ==================== FLUX ====================
+# Генерация изображений через Flux
 @bot.message_handler(commands=['draw', 'image'])
 def handle_image_generation(message):
-    # Чистим команду и упоминания
-    prompt = message.text.replace('/draw', '').replace('/image', '').replace(bot.username, '').strip()
-    
-    if not prompt:
-        bot.reply_to(message, "Укажите, что нарисовать! Пример: /draw кот в шляпе")
+    # Извлекаем текст после команды
+    try:
+        prompt = message.text.split(' ', 1)[1]
+    except IndexError:
+        bot.reply_to(message, "Укажите описание после команды. Пример: /draw кот")
         return
-    
-    status_msg = bot.reply_to(message, "🎨 Генерирую Flux... (это может занять 10–30 сек)")
 
+    status_msg = bot.reply_to(message, "🎨 Рисую изображение...")
     try:
         headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-        url = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-dev"
-        
-        response = requests.post(
-            url,
-            headers=headers,
-            json={"inputs": prompt},
-            timeout=120
-        )
+        response = requests.post(FLUX_API_URL, headers=headers, json={"inputs": prompt})
         
         if response.status_code == 200:
-            bot.delete_message(message.chat.id, status_msg.message_id)
-            bot.send_photo(
-                message.chat.id,
-                io.BytesIO(response.content),
-                caption=f"✅ Flux: {prompt[:50]}...",
-                reply_to_message_id=message.message_id
-            )
+            content_type = response.headers.get("content-type", "")
+            if "image" in content_type:
+                # Это картинка – отправляем
+                bot.delete_message(message.chat.id, status_msg.message_id)
+                bot.send_photo(
+                    message.chat.id,
+                    io.BytesIO(response.content),
+                    reply_to_message_id=message.message_id
+                )
+            else:
+                # Вероятно, JSON с ошибкой/предупреждением
+                error_data = response.json()
+                error_text = error_data.get("error", "Неизвестная ошибка HF")
+                bot.edit_message_text(
+                    f"Ошибка модели: {error_text}",
+                    message.chat.id,
+                    status_msg.message_id
+                )
         else:
             bot.edit_message_text(
-                f"❌ Ошибка Flux ({response.status_code}): {response.text[:300]}",
+                f"Ошибка HF API. Код: {response.status_code}",
                 message.chat.id,
                 status_msg.message_id
             )
     except Exception as e:
-        bot.edit_message_text("❌ Не удалось сгенерировать изображение. Проверьте HF_TOKEN и доступность модели.", 
-                              message.chat.id, status_msg.message_id)
-
-
-# ==================== GROQ (Llama 3) ====================
-@bot.message_handler(func=lambda message: True)
-def handle_text_chat(message):
-    if message.text.startswith(('/draw', '/image')):
-        return  # уже обработано выше
-    
-    try:
-        completion = ai_client.chat.completions.create(
-            model="llama3-8b-8192",
-            messages=[{"role": "user", "content": message.text}]
+        bot.edit_message_text(
+            "Не удалось сгенерировать изображение.",
+            message.chat.id,
+            status_msg.message_id
         )
-        bot.reply_to(message, completion.choices.message.content)
-    except Exception as e:
-        bot.reply_to(message, f"❌ Ошибка Groq: {str(e)}")
 
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)    if not prompt:
-        bot.reply_to(message, "Укажите, что нарисовать после команды. Пример: /draw кот")
-        return
-    status_msg = bot.reply_to(message, "🎨 Рисую картинку Flux...")
-    try:
-        headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-        response = requests.post(
-            "https://huggingface.co", 
-            headers=headers, 
-            json={"inputs": prompt}
-        )
-        if response.status_code == 200:
-            bot.delete_message(message.chat.id, status_msg.message_id)
-            bot.send_photo(message.chat.id, io.BytesIO(response.content), reply_to_message_id=message.message_id)
-        else:
-            bot.edit_message_text(f"Ошибка Flux. Код: {response.status_code}", message.chat.id, status_msg.message_id)
-    except Exception as e:
-        bot.edit_message_text("Не удалось сгенерировать изображение.", message.chat.id, status_msg.message_id)
-
-# 2. Текстовый чат Llama 3 (Groq)
+# Текстовый чат с Llama 3 (Groq)
 @bot.message_handler(func=lambda message: True)
 def handle_text_chat(message):
     try:
@@ -116,9 +89,9 @@ def handle_text_chat(message):
             model="llama3-8b-8192",
             messages=[{"role": "user", "content": message.text}]
         )
-        bot.reply_to(message, completion.choices.message.content)
+        bot.reply_to(message, completion.choices[0].message.content)
     except Exception as e:
-        bot.reply_to(message, f"Ошибка текста: {e}")
+        bot.reply_to(message, f"Ошибка текстовой модели: {e}")
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
