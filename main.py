@@ -50,7 +50,8 @@ def handle_image_generation(message):
 def handle_text_chat(message):
     try:
         completion = ai_client.chat.completions.create(
-            model="llama3-8b-8192",
+            model="deepseek-v4-flash",
+
             messages=[{"role": "user", "content": message.text}]
         )
         bot.reply_to(message, completion.choices.message.content)
