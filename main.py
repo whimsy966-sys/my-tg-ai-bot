@@ -11,7 +11,8 @@ TEXT_AI_API_KEY = os.environ.get("TEXT_AI_API_KEY")
 HF_TOKEN = os.environ.get("HF_TOKEN")
 
 bot = telebot.TeleBot(TG_TOKEN, threaded=False)
-ai_client = OpenAI(base_url="https://groq.com", api_key=TEXT_AI_API_KEY)
+ai_client = OpenAI(base_url="https://api.deepseek.com/v1", api_key=TEXT_AI_API_KEY)
+
 app = Flask(__name__)
 
 @app.route(f'/{TG_TOKEN}', methods=['POST'])
