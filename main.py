@@ -13,9 +13,9 @@ HF_TOKEN = os.environ.get("HF_TOKEN")
 bot = telebot.TeleBot(TG_TOKEN, threaded=False)
 app = Flask(__name__)
 
-# Официальный актуальный адрес API DeepSeek
+# Возвращаем стабильный и бесплатный Groq для текста
 ai_client = OpenAI(
-    base_url="https://deepseek.com", 
+    base_url="https://groq.com", 
     api_key=TEXT_AI_API_KEY
 )
 
@@ -30,7 +30,7 @@ def receive_update():
 def homepage():
     return "Бот активен на Render!", 200
 
-# 1. Генерация картинок (Flux)
+# 1. Сборка картинок Flux (Hugging Face)
 @bot.message_handler(commands=['draw', 'image'])
 def handle_image_generation(message):
     prompt = message.text.replace('/draw', '').replace('/image', '').strip()
@@ -49,24 +49,21 @@ def handle_image_generation(message):
             bot.delete_message(message.chat.id, status_msg.message_id)
             bot.send_photo(message.chat.id, io.BytesIO(response.content), reply_to_message_id=message.message_id)
         else:
-            bot.edit_message_text(f"Ошибка ИИ-картинок. Код: {response.status_code}", message.chat.id, status_msg.message_id)
+            bot.edit_message_text(f"Ошибка Flux. Код: {response.status_code}", message.chat.id, status_msg.message_id)
     except Exception as e:
         bot.edit_message_text("Не удалось сгенерировать изображение.", message.chat.id, status_msg.message_id)
 
-# 2. ТЕКСТОВЫЙ ЧАТ (DeepSeek)
+# 2. Текстовый чат Llama 3 (Groq)
 @bot.message_handler(func=lambda message: True)
 def handle_text_chat(message):
     try:
-        # Используем новейшую модель DeepSeek V4-Flash
         completion = ai_client.chat.completions.create(
-            model="deepseek-v4-flash",
+            model="llama3-8b-8192",
             messages=[{"role": "user", "content": message.text}]
         )
         bot.reply_to(message, completion.choices.message.content)
     except Exception as e:
-        bot.reply_to(message, f"Ошибка ИИ при генерации ответа. Подробности: {e}")
-        print(f"Ошибка Текста: {e}")
-
+        bot.reply_to(message, f"Ошибка текста: {e}")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
