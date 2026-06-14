@@ -20,7 +20,7 @@ ai_client = OpenAI(
 )
 
 # Hugging Face Flux Schnell (быстрая генерация)
-HF_API_URL = "https://api.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
+HF_API_URL = "https://router.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
 
 @app.route(f'/{TG_TOKEN}', methods=['POST'])
 def receive_update():
