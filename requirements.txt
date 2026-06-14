@@ -3,3 +3,4 @@ pyTelegramBotAPI
 openai
 requests
 flask
+Pillow
