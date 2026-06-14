@@ -4,6 +4,7 @@ import telebot
 import requests
 from openai import OpenAI
 from flask import Flask, request
+from huggingface_hub import InferenceClient  # <-- добавили
 
 # Секреты
 TG_TOKEN = os.environ.get("TG_TOKEN")
@@ -19,8 +20,11 @@ ai_client = OpenAI(
     api_key=DEEPSEEK_API_KEY
 )
 
-# Hugging Face Flux Schnell (быстрая генерация)
-HF_API_URL = "https://router.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
+# Новый клиент для генерации изображений через Hugging Face InferenceClient
+image_client = InferenceClient(
+    provider="nscale",
+    api_key=HF_TOKEN
+)
 
 @app.route(f'/{TG_TOKEN}', methods=['POST'])
 def receive_update():
@@ -33,7 +37,7 @@ def receive_update():
 def homepage():
     return "Бот активен!", 200
 
-# Генерация изображений
+# Генерация изображений (новая версия)
 @bot.message_handler(commands=['draw', 'image'])
 def handle_image_generation(message):
     try:
@@ -42,38 +46,29 @@ def handle_image_generation(message):
         bot.reply_to(message, "Укажите описание после команды. Пример: /draw кот")
         return
 
-    status_msg = bot.reply_to(message, "🎨 Рисую Flux Schnell...")
+    status_msg = bot.reply_to(message, "🎨 Рисую...")
 
     try:
-        headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-        response = requests.post(HF_API_URL, headers=headers, json={"inputs": prompt}, timeout=60)
+        # Генерируем изображение через InferenceClient
+        image = image_client.text_to_image(
+            prompt,
+            model="black-forest-labs/FLUX.1-schnell"
+        )
 
-        if response.status_code == 200:
-            content_type = response.headers.get("content-type", "")
-            if "image" in content_type:
-                bot.delete_message(message.chat.id, status_msg.message_id)
-                bot.send_photo(
-                    message.chat.id,
-                    io.BytesIO(response.content),
-                    reply_to_message_id=message.message_id
-                )
-            else:
-                # Возможно, ошибка в JSON
-                error_json = response.json()
-                bot.edit_message_text(
-                    f"❌ Ошибка модели: {error_json.get('error', 'неизвестно')}",
-                    message.chat.id,
-                    status_msg.message_id
-                )
-        else:
-            bot.edit_message_text(
-                f"❌ Ошибка HF API: {response.status_code}",
-                message.chat.id,
-                status_msg.message_id
-            )
+        # Преобразуем PIL Image в байты для отправки в Telegram
+        img_byte_arr = io.BytesIO()
+        image.save(img_byte_arr, format='PNG')
+        img_byte_arr.seek(0)
+
+        bot.delete_message(message.chat.id, status_msg.message_id)
+        bot.send_photo(
+            message.chat.id,
+            img_byte_arr,
+            reply_to_message_id=message.message_id
+        )
     except Exception as e:
         bot.edit_message_text(
-            f"❌ Ошибка соединения: {str(e)[:400]}",
+            f"❌ Ошибка генерации: {str(e)[:400]}",
             message.chat.id,
             status_msg.message_id
         )
