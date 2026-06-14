@@ -38,9 +38,12 @@ def homepage():
 def handle_image_generation(message):
     try:
         prompt = message.text.split(' ', 1)[1]
-    except IndexError:
-        bot.reply_to(message, "Укажите описание после команды. Пример: /draw кот")
-        return
+    except Exception as e:
+    bot.edit_message_text(
+        f"❌ Ошибка HF: {str(e)}",
+        message.chat.id,
+        status_msg.message_id
+    )
 
     status_msg = bot.reply_to(message, "🎨 Рисую изображение...")
     try:
