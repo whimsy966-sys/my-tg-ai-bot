@@ -3,77 +3,44 @@ import io
 import requests
 import telebot
 from openai import OpenAI
-from flask import Flask, request
 from PIL import Image
 
-# === Проверка переменных ===
 TG_TOKEN = os.environ.get("TG_TOKEN")
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
-BASE_URL = os.environ.get("BASE_URL")
 
-if not TG_TOKEN or not DEEPSEEK_API_KEY or not BASE_URL:
-    raise ValueError("Не заданы переменные окружения: TG_TOKEN, DEEPSEEK_API_KEY, BASE_URL")
+if not TG_TOKEN or not DEEPSEEK_API_KEY:
+    raise ValueError("Не заданы TG_TOKEN или DEEPSEEK_API_KEY")
 
-bot = telebot.TeleBot(TG_TOKEN, threaded=False)
-app = Flask(__name__)
+bot = telebot.TeleBot(TG_TOKEN)
+ai_client = OpenAI(base_url="https://api.deepseek.com", api_key=DEEPSEEK_API_KEY)
 
-# DeepSeek клиент
-ai_client = OpenAI(
-    base_url="https://api.deepseek.com",
-    api_key=DEEPSEEK_API_KEY
-)
-
-# === Команды ===
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
-    bot.reply_to(
-        message,
-        "🤖 Привет! Я умею:\n"
-        "/draw <описание> – нарисовать картинку\n"
-        "/image <описание> – то же самое\n"
-        "Просто напиши текст – я отвечу через DeepSeek."
-    )
+    bot.reply_to(message, "🤖 Привет!\n/draw <описание> – нарисовать картинку\nПросто напиши текст – отвечу DeepSeek.")
 
-# === Генерация изображений через Pollinations API (без библиотеки) ===
 @bot.message_handler(commands=['draw', 'image'])
 def handle_image_generation(message):
     try:
         prompt = message.text.split(' ', 1)[1]
     except IndexError:
-        bot.reply_to(message, "❌ Укажите описание после команды. Пример: /draw кот в космосе")
+        bot.reply_to(message, "❌ Укажите описание после команды. Пример: /draw кот")
         return
 
     status_msg = bot.reply_to(message, "🎨 Рисую... (5–10 секунд)")
-
     try:
-        # Экранируем пробелы для URL
+        # Прямой вызов Pollinations API
         url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(prompt)}"
-        
-        # Загружаем изображение
         response = requests.get(url, timeout=30)
         response.raise_for_status()
-
-        # Конвертируем в PIL и в байты
         img = Image.open(io.BytesIO(response.content))
         img_byte_arr = io.BytesIO()
         img.save(img_byte_arr, format='PNG')
         img_byte_arr.seek(0)
-
         bot.delete_message(message.chat.id, status_msg.message_id)
-        bot.send_photo(
-            message.chat.id,
-            img_byte_arr,
-            reply_to_message_id=message.message_id,
-            caption=f"✨ {prompt[:100]}"
-        )
+        bot.send_photo(message.chat.id, img_byte_arr, reply_to_message_id=message.message_id)
     except Exception as e:
-        bot.edit_message_text(
-            f"❌ Ошибка генерации: {str(e)[:400]}",
-            message.chat.id,
-            status_msg.message_id
-        )
+        bot.edit_message_text(f"❌ Ошибка: {str(e)[:400]}", message.chat.id, status_msg.message_id)
 
-# === Текстовый чат DeepSeek ===
 @bot.message_handler(func=lambda message: True)
 def handle_text_chat(message):
     try:
@@ -85,26 +52,6 @@ def handle_text_chat(message):
     except Exception as e:
         bot.reply_to(message, f"❌ Ошибка DeepSeek: {e}")
 
-# === Flask вебхук ===
-@app.route(f'/{TG_TOKEN}', methods=['POST'])
-def webhook():
-    json_string = request.get_data().decode('utf-8')
-    update = telebot.types.Update.de_json(json_string)
-    bot.process_new_updates([update])
-    return '!', 200
-
-@app.route('/')
-def homepage():
-    return "Бот активен!", 200
-
-# === Установка вебхука при старте ===
-def set_webhook():
-    bot.remove_webhook()
-    webhook_url = f"{BASE_URL}/{TG_TOKEN}"
-    bot.set_webhook(url=webhook_url)
-    print(f"Webhook установлен на {webhook_url}")
-
 if __name__ == "__main__":
-    set_webhook()
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    print("Бот запущен в режиме polling...")
+    bot.polling(none_stop=True)
