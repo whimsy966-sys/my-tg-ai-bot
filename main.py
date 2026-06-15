@@ -33,40 +33,33 @@ ai_client = OpenAI(base_url="https://deepseek.com", api_key=DEEPSEEK_API_KEY)
 def send_welcome(message):
     bot.reply_to(message, "🤖 Привет!\n/draw <описание> – нарисовать картинку\nПросто напиши текст – отвечу DeepSeek.")
 
-# ИСПРАВЛЕННАЯ БЕСПЛАТНАЯ ГЕНЕРАЦИЯ КАРТИНОК БЕЗ АВТОМАТОВ
+# ИСПРАВЛЕННАЯ БЕЗОПАСНАЯ ГЕНЕРАЦИЯ КАРТИНОК
 @bot.message_handler(commands=['draw', 'image'])
 def handle_image_generation(message):
-    try:
-        try:
-        # ПРАВИЛЬНОЕ ИЗВЛЕЧЕНИЕ ЧИСТОГО ТЕКСТА
-        text_parts = message.text.split(' ', 1)
-        if len(text_parts) < 2:
-            bot.reply_to(message, "❌ Укажите описание после команды. Пример: /draw кот")
-            return
-        prompt_text = text_parts[1].strip()  # Берем строго текст запроса, без скобок
-    except Exception:
-        bot.reply_to(message, "❌ Не удалось прочитать запрос.")
+    # Проверяем, указал ли пользователь описание
+    if ' ' not in message.text:
+        bot.reply_to(message, "❌ Укажите описание после команды. Пример: /draw кот")
         return
 
+    # Отрезаем команду /draw и берем чистый текст
+    prompt_text = message.text.split(' ', 1)[1].strip()
     status_msg = bot.reply_to(message, "🎨 Рисую картинку, подождите...")
-    try:
-        clean_prompt = requests.utils.quote(prompt_text)
-        
-        # Чистая ссылка без склеивания слов
-        url = f"https://pollinations.ai{clean_prompt}?model=flux&nologo=true"
 
-        
-        # Ссылка строго на бесплатную модель Flux без логотипов
+    try:
+        # Превращаем русский или английский текст в безопасную интернет-ссылку
+        clean_prompt = requests.utils.quote(prompt_text)
         url = f"https://pollinations.ai{clean_prompt}?model=flux&nologo=true"
         
         response = requests.get(url, timeout=40)
         response.raise_for_status()
         
+        # Конвертируем изображение
         img = Image.open(io.BytesIO(response.content))
         img_byte_arr = io.BytesIO()
         img.save(img_byte_arr, format='PNG')
         img_byte_arr.seek(0)
         
+        # Удаляем надпись "Рисую..." и отправляем фото
         bot.delete_message(message.chat.id, status_msg.message_id)
         bot.send_photo(message.chat.id, img_byte_arr, reply_to_message_id=message.message_id)
     except Exception as e:
