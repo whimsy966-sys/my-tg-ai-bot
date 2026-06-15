@@ -12,7 +12,7 @@ if not TG_TOKEN or not DEEPSEEK_API_KEY:
     raise ValueError("Не заданы TG_TOKEN или DEEPSEEK_API_KEY")
 
 bot = telebot.TeleBot(TG_TOKEN)
-ai_client = OpenAI(base_url="https://api.deepseek.com", api_key=DEEPSEEK_API_KEY)
+ai_client = OpenAI(base_url="https://api.deepseek.com/v1", api_key=DEEPSEEK_API_KEY)
 
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
