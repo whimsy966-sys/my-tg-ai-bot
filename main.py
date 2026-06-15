@@ -37,11 +37,13 @@ def send_welcome(message):
 @bot.message_handler(commands=['draw', 'image'])
 def handle_image_generation(message):
     try:
+        try:
+        # ПРАВИЛЬНОЕ ИЗВЛЕЧЕНИЕ ЧИСТОГО ТЕКСТА
         text_parts = message.text.split(' ', 1)
         if len(text_parts) < 2:
             bot.reply_to(message, "❌ Укажите описание после команды. Пример: /draw кот")
             return
-        prompt_text = text_parts[1].strip()
+        prompt_text = text_parts[1].strip()  # Берем строго текст запроса, без скобок
     except Exception:
         bot.reply_to(message, "❌ Не удалось прочитать запрос.")
         return
@@ -49,6 +51,10 @@ def handle_image_generation(message):
     status_msg = bot.reply_to(message, "🎨 Рисую картинку, подождите...")
     try:
         clean_prompt = requests.utils.quote(prompt_text)
+        
+        # Чистая ссылка без склеивания слов
+        url = f"https://pollinations.ai{clean_prompt}?model=flux&nologo=true"
+
         
         # Ссылка строго на бесплатную модель Flux без логотипов
         url = f"https://pollinations.ai{clean_prompt}?model=flux&nologo=true"
