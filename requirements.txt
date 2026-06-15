@@ -4,3 +4,4 @@ openai
 requests
 flask
 Pillow
+pip install pollinations.ai
