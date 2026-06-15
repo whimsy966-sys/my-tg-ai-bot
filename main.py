@@ -4,6 +4,7 @@ import requests
 import telebot
 from openai import OpenAI
 from PIL import Image
+from flask import Flask, request  # <-- Добавили Flask для Render
 
 TG_TOKEN = os.environ.get("TG_TOKEN")
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
@@ -11,7 +12,23 @@ DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
 if not TG_TOKEN or not DEEPSEEK_API_KEY:
     raise ValueError("Не заданы TG_TOKEN или DEEPSEEK_API_KEY")
 
-bot = telebot.TeleBot(TG_TOKEN)
+# Для вебхуков на Render обязательно отключаем потоки (threaded=False)
+bot = telebot.TeleBot(TG_TOKEN, threaded=False)
+app = Flask(__name__)  # <-- Инициализируем веб-сервер
+
+# Настройка веб-пути для Telegram
+@app.route(f'/{TG_TOKEN}', methods=['POST'])
+def receive_update():
+    json_string = request.get_data().decode('utf-8')
+    update = telebot.types.Update.de_json(json_string)
+    bot.process_new_updates([update])
+    return "!", 200
+
+# Главная страница для проверки Render
+@app.route('/')
+def homepage():
+    return "Робот Pollinations + DeepSeek успешно запущен на Render!", 200
+
 ai_client = OpenAI(base_url="https://api.deepseek.com/v1", api_key=DEEPSEEK_API_KEY)
 
 @bot.message_handler(commands=['start', 'help'])
@@ -53,5 +70,5 @@ def handle_text_chat(message):
         bot.reply_to(message, f"❌ Ошибка DeepSeek: {e}")
 
 if __name__ == "__main__":
-    print("Бот запущен в режиме polling...")
-    bot.polling(none_stop=True)
+    # Запускаем Flask на порту 10000, который требует Render
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
