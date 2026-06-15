@@ -48,7 +48,9 @@ def handle_image_generation(message):
     try:
         # Превращаем русский или английский текст в безопасную интернет-ссылку
         clean_prompt = requests.utils.quote(prompt_text)
-        url = f"https://pollinations.ai{clean_prompt}?model=flux&nologo=true"
+        # Жесткое разделение сайта и текста, чтобы они больше никогда не склеивались
+        base_site = "https://pollinations.ai"
+        url = base_site + "/" + clean_prompt
         
         response = requests.get(url, timeout=40)
         response.raise_for_status()
