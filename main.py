@@ -1,14 +1,15 @@
 import os
 import io
+import requests
 import telebot
-import pollinations  # бесплатная генерация изображений
 from openai import OpenAI
 from flask import Flask, request
+from PIL import Image
 
-# === Конфигурация ===
+# === Проверка переменных ===
 TG_TOKEN = os.environ.get("TG_TOKEN")
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
-BASE_URL = os.environ.get("BASE_URL")  # например, https://твой-бот.onrender.com
+BASE_URL = os.environ.get("BASE_URL")
 
 if not TG_TOKEN or not DEEPSEEK_API_KEY or not BASE_URL:
     raise ValueError("Не заданы переменные окружения: TG_TOKEN, DEEPSEEK_API_KEY, BASE_URL")
@@ -16,7 +17,7 @@ if not TG_TOKEN or not DEEPSEEK_API_KEY or not BASE_URL:
 bot = telebot.TeleBot(TG_TOKEN, threaded=False)
 app = Flask(__name__)
 
-# DeepSeek (текстовая модель)
+# DeepSeek клиент
 ai_client = OpenAI(
     base_url="https://api.deepseek.com",
     api_key=DEEPSEEK_API_KEY
@@ -33,7 +34,7 @@ def send_welcome(message):
         "Просто напиши текст – я отвечу через DeepSeek."
     )
 
-# === Генерация изображений через Pollinations (бесплатно) ===
+# === Генерация изображений через Pollinations API (без библиотеки) ===
 @bot.message_handler(commands=['draw', 'image'])
 def handle_image_generation(message):
     try:
@@ -42,15 +43,20 @@ def handle_image_generation(message):
         bot.reply_to(message, "❌ Укажите описание после команды. Пример: /draw кот в космосе")
         return
 
-    status_msg = bot.reply_to(message, "🎨 Рисую... (это может занять 5–10 секунд)")
+    status_msg = bot.reply_to(message, "🎨 Рисую... (5–10 секунд)")
 
     try:
-        # Генерируем изображение
-        image = pollinations.Image(prompt=prompt)
+        # Экранируем пробелы для URL
+        url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(prompt)}"
+        
+        # Загружаем изображение
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
 
-        # Конвертируем в байты для отправки в Telegram
+        # Конвертируем в PIL и в байты
+        img = Image.open(io.BytesIO(response.content))
         img_byte_arr = io.BytesIO()
-        image.save(img_byte_arr, format='PNG')
+        img.save(img_byte_arr, format='PNG')
         img_byte_arr.seek(0)
 
         bot.delete_message(message.chat.id, status_msg.message_id)
@@ -67,7 +73,7 @@ def handle_image_generation(message):
             status_msg.message_id
         )
 
-# === Обработка любого текста через DeepSeek ===
+# === Текстовый чат DeepSeek ===
 @bot.message_handler(func=lambda message: True)
 def handle_text_chat(message):
     try:
@@ -79,7 +85,7 @@ def handle_text_chat(message):
     except Exception as e:
         bot.reply_to(message, f"❌ Ошибка DeepSeek: {e}")
 
-# === Вебхук для Flask ===
+# === Flask вебхук ===
 @app.route(f'/{TG_TOKEN}', methods=['POST'])
 def webhook():
     json_string = request.get_data().decode('utf-8')
@@ -91,7 +97,7 @@ def webhook():
 def homepage():
     return "Бот активен!", 200
 
-# === Установка вебхука при запуске ===
+# === Установка вебхука при старте ===
 def set_webhook():
     bot.remove_webhook()
     webhook_url = f"{BASE_URL}/{TG_TOKEN}"
