@@ -22,7 +22,7 @@ ai_client = OpenAI(
 
 # Новый клиент для генерации изображений через Hugging Face InferenceClient
 image_client = InferenceClient(
-    provider="nscale",
+    
     api_key=HF_TOKEN
 )
 
