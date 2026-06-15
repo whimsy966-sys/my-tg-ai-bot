@@ -46,7 +46,7 @@ def handle_image_generation(message):
     status_msg = bot.reply_to(message, "🎨 Рисую... (5–10 секунд)")
     try:
         # Прямой вызов Pollinations API
-        url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(prompt)}?model=flux"
+        url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(prompt)}"
         response = requests.get(url, timeout=30)
         response.raise_for_status()
         img = Image.open(io.BytesIO(response.content))
